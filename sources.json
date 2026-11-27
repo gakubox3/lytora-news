@@ -1,0 +1,61 @@
+{
+  "regional_feeds": [
+    {
+      "name": "BBC Africa",
+      "region": "アフリカ",
+      "url": "https://feeds.bbci.co.uk/news/world/africa/rss.xml"
+    },
+    {
+      "name": "BBC Asia",
+      "region": "アジア",
+      "url": "https://feeds.bbci.co.uk/news/world/asia/rss.xml"
+    },
+    {
+      "name": "BBC Middle East",
+      "region": "中東",
+      "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml"
+    },
+    {
+      "name": "BBC Latin America",
+      "region": "中南米",
+      "url": "https://feeds.bbci.co.uk/news/world/latin_america/rss.xml"
+    },
+    {
+      "name": "BBC Europe",
+      "region": "ヨーロッパ",
+      "url": "https://feeds.bbci.co.uk/news/world/europe/rss.xml"
+    },
+    {
+      "name": "Al Jazeera English",
+      "region": "世界",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml"
+    },
+    {
+      "name": "The Guardian World",
+      "region": "世界",
+      "url": "https://www.theguardian.com/world/rss"
+    }
+  ],
+  "priority_countries": [
+    "Namibia",
+    "Mongolia",
+    "Moldova",
+    "Oman",
+    "Bhutan",
+    "Rwanda",
+    "Uruguay",
+    "Fiji",
+    "Senegal",
+    "Laos",
+    "Botswana",
+    "Georgia",
+    "Armenia",
+    "Kyrgyzstan",
+    "Tajikistan",
+    "Papua New Guinea",
+    "Paraguay",
+    "Suriname",
+    "Mauritania",
+    "Timor-Leste"
+  ]
+}

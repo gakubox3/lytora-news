@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071421"><meta name="description" content="世界を知る。未来を読む。見出しの、その先へ。">
+<title>LYTORA — SEE BEYOND THE HEADLINES</title>
+<style>
+:root{color-scheme:dark;--bg:#071421;--panel:#102334;--line:#254055;--cyan:#65e5e0;--muted:#9bb0c0;--white:#f3f7fa}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#153b50 0,transparent 36%),var(--bg);color:var(--white);font:15px/1.6 system-ui,-apple-system,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif}
+header{padding:28px max(20px,calc((100% - 1050px)/2)) 20px;border-bottom:1px solid var(--line)}
+.brand{font-size:32px;font-weight:850;letter-spacing:.16em;color:var(--cyan)}.tag{color:var(--muted);letter-spacing:.12em;font-size:11px}
+main{max-width:1050px;margin:auto;padding:22px 18px 60px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:23px;margin:8px 0}.sub{color:var(--muted);font-size:13px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
+input,select,button{background:#102334;border:1px solid var(--line);color:var(--white);border-radius:10px;padding:11px 13px;font:inherit}
+input{flex:1;min-width:180px}button{cursor:pointer}button.active{border-color:var(--cyan);color:var(--cyan)}
+#status{font-size:12px;color:var(--muted);margin:8px 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:12px}
+article{background:linear-gradient(145deg,#122b3d,#0c1d2c);border:1px solid var(--line);border-radius:15px;padding:17px;min-width:0}
+.meta{font-size:11px;color:var(--cyan);display:flex;gap:8px;flex-wrap:wrap}
+h2{font-size:17px;line-height:1.45;margin:10px 0}
+.summary{color:#c2d0da;font-size:13px;line-height:1.65}
+.source{font-size:11px;color:var(--muted);margin-top:14px;display:flex;justify-content:space-between;gap:8px}
+a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}
+footer{max-width:1050px;margin:auto;padding:0 18px 32px;color:var(--muted);font-size:11px}
+.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+@media(max-width:520px){.brand{font-size:27px}header{padding-top:22px}}
+</style></head><body>
+<header><div class="brand">LYTORA</div><div class="tag">SEE BEYOND THE HEADLINES.</div></header>
+<main>
+<div class="top"><div><h1>世界を知る。未来を読む。</h1><div class="sub">知られざる国々のニュースを、見出しのその先へ。</div></div><div class="sub" id="updated">データ確認中…</div></div>
+<div class="controls"><input id="q" placeholder="国名・キーワードで検索"><select id="region"><option value="">すべての地域</option><option>アフリカ</option><option>アジア</option><option>中東</option><option>中南米</option><option>ヨーロッパ</option><option>世界</option><option>国別</option></select><button id="refresh">再読み込み</button></div>
+<div id="status">ニュースデータを読み込んでいます。</div><section id="list" class="grid"></section>
+</main>
+<footer>LYTORA β / 表示内容はRSS配信元の見出し・短い要約です。詳細は各配信元の記事をご確認ください。日本との関連性や背景解説は編集確認後に追加します。</footer>
+<script>
+let items=[];
+const esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function render(){
+ const q=document.querySelector("#q").value.toLowerCase(), r=document.querySelector("#region").value;
+ const filtered=items.filter(x=>(!r||x.region===r)&&(!q||[x.title,x.summary,x.country,x.publisher].join(" ").toLowerCase().includes(q)));
+ const list=document.querySelector("#list");
+ if(!filtered.length){list.innerHTML='<div class="empty">該当するニュースがありません。検索語や地域を変えてみてください。</div>';return}
+ list.innerHTML=filtered.slice(0,100).map(x=>`<article><div class="meta"><span>${esc(x.region)}</span>${x.country?`<span>・${esc(x.country)}</span>`:""}<span>・${x.published_at?new Date(x.published_at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"}):"日時未取得"}</span></div><h2>${esc(x.title)}</h2><div class="summary">${esc(x.summary||"配信元の短い要約はありません。元記事で内容をご確認ください。")}</div><div class="source"><span>${esc(x.publisher)}</span><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">原文を読む ↗</a></div></article>`).join("");
+ document.querySelector("#status").textContent=`${filtered.length}件を表示（最大100件）`;
+}
+async function load(){
+ document.querySelector("#status").textContent="データを読み込んでいます…";
+ try{const res=await fetch("./data/articles.json?ts="+Date.now());if(!res.ok)throw new Error("articles.json not found");const data=await res.json();items=data.articles||[];document.querySelector("#updated").textContent="最終更新："+new Date(data.generated_at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"});document.querySelector("#status").textContent=`${items.length}件のニュースを取得しました`;render()}
+ catch(e){document.querySelector("#status").textContent="ニュースデータはまだありません。GitHub Actionsで収集処理を一度実行してください。";document.querySelector("#list").innerHTML='<div class="empty">初回データ待ちです。セットアップ後、ここに実際のニュースが表示されます。</div>'}
+}
+document.querySelector("#q").addEventListener("input",render);document.querySelector("#region").addEventListener("change",render);document.querySelector("#refresh").addEventListener("click",load);load();
+</script></body></html>
