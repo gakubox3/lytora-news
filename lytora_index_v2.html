@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#071522">
+<title>LYTORA — See Beyond the Headlines</title>
+<style>
+:root{color-scheme:dark;--bg:#071522;--panel:#0d2030;--panel2:#10283a;--line:#20394b;--text:#edf5f8;--muted:#9bb0bd;--cyan:#59d7e8;--gold:#e7c879}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0a1c2b,#06111b 70%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+.wrap{max-width:1080px;margin:auto;padding:22px 16px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line);padding-bottom:18px}
+.brand{font-size:25px;font-weight:850;letter-spacing:.16em;color:#fff}.tag{font-size:10px;letter-spacing:.19em;color:var(--cyan);margin-top:2px}
+.pill{border:1px solid #315267;border-radius:99px;padding:7px 11px;color:var(--muted);font-size:11px}
+.hero{padding:35px 0 24px}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:.18em;font-weight:700}.hero h1{font-size:clamp(27px,5vw,44px);line-height:1.15;margin:10px 0}.hero p{color:var(--muted);max-width:650px;margin:0}
+.tools{display:flex;gap:9px;flex-wrap:wrap;margin:22px 0}.tools input,.tools select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;min-height:42px}.tools input{flex:1;min-width:190px}
+.tabs{display:flex;gap:8px;overflow:auto;padding:0 0 14px}.tab{white-space:nowrap;background:transparent;border:1px solid var(--line);color:var(--muted);padding:8px 13px;border-radius:99px}.tab.active{background:#14384a;border-color:#3a8da0;color:#fff}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:12px;margin:5px 0 14px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.story{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:15px;padding:17px;min-width:0}.story .kicker{display:flex;gap:8px;flex-wrap:wrap;color:var(--cyan);font-size:11px;font-weight:700;letter-spacing:.05em}.story h2{font-size:17px;line-height:1.4;margin:10px 0 8px}.story p{font-size:13px;color:var(--muted);margin:0 0 12px}.story a{color:#8ce7f0;text-decoration:none;font-size:13px;font-weight:700}.story a:hover{text-decoration:underline}.date{color:#8097a6;font-size:11px;margin-top:12px}
+.empty{border:1px dashed #365064;border-radius:14px;padding:24px;color:var(--muted);text-align:center;grid-column:1/-1}.foot{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;color:#8298a6}.notice{background:#122b3b;border:1px solid #2b5268;border-radius:10px;padding:12px 14px;color:#b9cbd4;font-size:12px;margin:0 0 16px}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.wrap{padding:17px 13px 45px}.hero{padding-top:28px}.top{align-items:flex-start}.pill{font-size:10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div><div class="brand">LYTORA</div><div class="tag">SEE BEYOND THE HEADLINES.</div></div>
+  <div class="pill">GLOBAL NEWS · BETA</div>
+</header>
+<section class="hero">
+  <div class="eyebrow">THE WORLD, IN CONTEXT</div>
+  <h1>見出しの、その先へ。</h1>
+  <p>まだ広く知られていない国や地域の動きを、日本とのつながりとともに追いかける。</p>
+</section>
+<div class="notice" id="status">ニュースデータを読み込んでいます…</div>
+<div class="tools">
+  <input id="search" type="search" placeholder="国名・見出し・キーワードで検索">
+  <select id="region"><option value="all">すべての地域</option><option>アジア</option><option>アフリカ</option><option>中東</option><option>ヨーロッパ</option><option>中南米</option><option>オセアニア</option><option>その他</option></select>
+</div>
+<nav class="tabs" aria-label="ニュース表示">
+  <button class="tab active" data-tab="latest">最新ニュース</button>
+  <button class="tab" data-tab="lesser">注目・見落とされがちな地域</button>
+</nav>
+<div class="meta"><span id="count">0件</span><span id="updated">データ確認中</span></div>
+<main class="grid" id="stories"><div class="empty">ニュースデータを読み込んでいます。</div></main>
+<footer class="foot">LYTORA BETA · 記事の内容・正確性はリンク先の原典で確認してください。見出しとリンクは各配信元の情報に基づきます。</footer>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let allStories = [], activeTab = "latest";
+const lesserTerms = /africa|african|central asia|uzbek|kazakh|kyrgyz|tajik|turkmen|mongolia|nepal|bhutan|laos|cambodia|myanmar|bangladesh|sri lanka|papua|fiji|solomon|caribbean|bolivia|paraguay|uruguay|senegal|ghana|kenya|ethiopia|rwanda|namibia|zambia|malawi|mozambique|georgia|armenia|moldova|バングラデシュ|ネパール|ブータン|ラオス|カンボジア|ミャンマー|中央アジア|アフリカ|フィジー|モンゴル/i;
+function first(obj, keys){for(const k of keys){if(obj && obj[k]!==undefined && obj[k]!==null && obj[k]!=="") return obj[k]}return ""}
+function flatten(data){
+  if(Array.isArray(data)) return data;
+  if(data && Array.isArray(data.articles)) return data.articles;
+  if(data && Array.isArray(data.items)) return data.items;
+  if(data && typeof data==="object"){
+    for(const v of Object.values(data)){if(Array.isArray(v) && v.length && typeof v[0]==="object") return v}
+  }
+  return [];
+}
+function normalize(x){
+  const title=first(x,["title","headline","name"]) || "見出し情報なし";
+  const link=first(x,["link","url","href","article_url"]);
+  const summary=first(x,["summary","description","snippet","content"]);
+  const source=first(x,["source","publisher","site","feed_title"]);
+  const country=first(x,["country","country_name","nation"]);
+  const date=first(x,["published","published_at","pubDate","date","updated"]);
+  const region=first(x,["region","area"]) || guessRegion(country+" "+title);
+  return {title:String(title),link:String(link),summary:stripHtml(String(summary)).slice(0,360),source:String(source),country:String(country),date:String(date),region};
+}
+function stripHtml(s){const d=document.createElement("div");d.innerHTML=s;return d.textContent||d.innerText||""}
+function guessRegion(s){
+  if(/africa|アフリカ|ghana|kenya|nigeria|senegal|ethiopia|rwanda|zambia|namibia/i.test(s))return "アフリカ";
+  if(/middle east|中東|iran|iraq|israel|jordan|lebanon|yemen|oman/i.test(s))return "中東";
+  if(/latin|south america|中南米|bolivia|paraguay|peru|chile|brazil/i.test(s))return "中南米";
+  if(/pacific|oceania|オセアニア|fiji|samoa|tonga|papua/i.test(s))return "オセアニア";
+  if(/europe|ヨーロッパ|moldova|georgia|armenia|serbia/i.test(s))return "ヨーロッパ";
+  if(/asia|アジア|bangladesh|nepal|bhutan|laos|cambodia|myanmar|mongolia|uzbek|kazakh/i.test(s))return "アジア";
+  return "その他";
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function render(){
+  const q=$("#search").value.trim().toLowerCase(), r=$("#region").value;
+  let list=allStories.filter(a=>{
+    const hay=(a.title+" "+a.summary+" "+a.country+" "+a.source).toLowerCase();
+    return (!q||hay.includes(q))&&(r==="all"||a.region===r);
+  });
+  if(activeTab==="lesser") list=list.filter(a=>lesserTerms.test(a.title+" "+a.country+" "+a.summary)||!["ヨーロッパ","その他"].includes(a.region));
+  $("#count").textContent=list.length+"件";
+  $("#stories").innerHTML=list.length?list.slice(0,100).map(a=>`
+    <article class="story">
+      <div class="kicker"><span>${esc(a.country||a.region)}</span><span>／</span><span>${esc(a.source||"NEWS")}</span></div>
+      <h2>${esc(a.title)}</h2>
+      ${a.summary?`<p>${esc(a.summary)}</p>`:""}
+      ${a.link && /^https?:\/\//i.test(a.link)?`<a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">原記事を読む ↗</a>`:`<span style="color:#8298a6;font-size:12px">記事リンクなし</span>`}
+      <div class="date">${esc(a.date||"日付情報なし")} · ${esc(a.region)}</div>
+    </article>`).join(""):'<div class="empty">該当するニュースがありません。データファイルが空、または検索条件に一致していない可能性があります。</div>';
+}
+async function load(){
+  const candidates=["./data/articles.json","data/articles.json"];
+  let lastError;
+  for(const path of candidates){
+    try{
+      const res=await fetch(path+"?v="+Date.now(),{cache:"no-store"});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const data=await res.json();
+      allStories=flatten(data).map(normalize).filter(a=>a.title!=="見出し情報なし");
+      $("#status").textContent=allStories.length
+        ? "ニュースデータを読み込みました。掲載前に原記事を確認してください。"
+        : "データファイルは開けましたが、記事一覧を読み取れませんでした。JSONの形式確認が必要です。";
+      $("#updated").textContent="データ読み込み済み";
+      render();return;
+    }catch(e){lastError=e}
+  }
+  $("#status").textContent="ニュースデータを読み込めませんでした（"+(lastError?.message||"不明なエラー")+"）。data/articles.json の配置と公開設定を確認してください。";
+  $("#updated").textContent="読み込み失敗";
+  $("#stories").innerHTML='<div class="empty">記事データがまだ表示できません。GitHub Pagesなどで公開した場所から確認してください。</div>';
+}
+$("#search").addEventListener("input",render);
+$("#region").addEventListener("change",render);
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));activeTab=b.dataset.tab;render()}));
+load();
+</script>
+</body>
+</html>
