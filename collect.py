@@ -1,89 +1,255 @@
+
 #!/usr/bin/env python3
-"""LYTORA RSS collector. Collects public feed metadata; does not republish full articles."""
-import json, re, hashlib, urllib.parse, urllib.request
+"""LYTORA RSS collector."""
+import json
+import re
+import html
+import hashlib
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 BASE = Path(__file__).resolve().parent
-SOURCES = json.loads((BASE / "sources.json").read_text(encoding="utf-8"))
+SOURCES = json.loads(
+    (BASE / "sources.json").read_text(encoding="utf-8")
+)
 OUT = BASE / "data" / "articles.json"
 
-def clean(s):
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", s or "")).strip()
+REGIONS = {
+    "Namibia": "Africa",
+    "Rwanda": "Africa",
+    "Senegal": "Africa",
+    "Botswana": "Africa",
+    "Mauritania": "Africa",
+    "Mongolia": "Asia",
+    "Bhutan": "Asia",
+    "Laos": "Asia",
+    "Kyrgyzstan": "Asia",
+    "Tajikistan": "Asia",
+    "Papua New Guinea": "Oceania",
+    "Fiji": "Oceania",
+    "Moldova": "Europe",
+    "Georgia": "Europe",
+    "Armenia": "Europe",
+    "Oman": "Middle East",
+    "Uruguay": "Americas",
+    "Paraguay": "Americas",
+    "Suriname": "Americas",
+    "Timor-Leste": "Asia",
+}
+
+def clean(value):
+    value = html.unescape(value or "")
+    value = re.sub(r"<[^>]*>", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
 
 def get_text(node, names):
     for name in names:
-        el = node.find(name)
-        if el is not None and el.text:
-            return clean(el.text)
+        element = node.find(name)
+        if element is not None and element.text:
+            return clean(element.text)
     return ""
 
-def parse_feed(url, publisher, region, country=None):
-    req = urllib.request.Request(url, headers={"User-Agent":"LYTORA-NewsCollector/0.1 (RSS reader)"})
-    with urllib.request.urlopen(req, timeout=25) as response:
-        raw = response.read()
+def safe_url(url):
+    try:
+        parsed = urllib.parse.urlsplit(url.strip())
+        return (
+            parsed.scheme in ("https", "http")
+            and bool(parsed.netloc)
+            and not parsed.username
+            and not parsed.password
+        )
+    except Exception:
+        return False
+
+def parse_date(value):
+    if not value:
+        return ""
+    try:
+        dt = parsedate_to_datetime(value)
+    except Exception:
+        try:
+            dt = datetime.fromisoformat(
+                value.replace("Z", "+00:00")
+            )
+        except Exception:
+            return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+def parse_feed(url, publisher, region, country=""):
+    if not safe_url(url):
+        raise ValueError("Invalid feed URL")
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "LYTORA-NewsCollector/1.0"
+        }
+    )
+
+    with urllib.request.urlopen(request, timeout=20) as response:
+        raw = response.read(5_000_000)
+
     root = ET.fromstring(raw)
     items = root.findall(".//item")
+    atom = False
+
     if not items:
-        # Atom
-        ns = {"a":"http://www.w3.org/2005/Atom"}
+        ns = {"a": "http://www.w3.org/2005/Atom"}
         items = root.findall(".//a:entry", ns)
+        atom = True
+
     results = []
+
     for item in items:
-        title = get_text(item, ["title", "{http://www.w3.org/2005/Atom}title"])
+        title = get_text(
+            item,
+            ["title", "{http://www.w3.org/2005/Atom}title"]
+        )
+
         link = get_text(item, ["link"])
-        if not link:
-            link_el = item.find("{http://www.w3.org/2005/Atom}link")
-            if link_el is not None:
-                link = link_el.attrib.get("href","")
-        desc = get_text(item, ["description", "{http://www.w3.org/2005/Atom}summary", "{http://www.w3.org/2005/Atom}content"])
-        pub = get_text(item, ["pubDate", "published", "{http://www.w3.org/2005/Atom}published", "{http://www.w3.org/2005/Atom}updated"])
-        try:
-            dt = parsedate_to_datetime(pub)
-            if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
-            published = dt.astimezone(timezone.utc).isoformat()
-        except Exception:
-            try:
-                dt = datetime.fromisoformat(pub.replace("Z","+00:00"))
-                published = dt.astimezone(timezone.utc).isoformat()
-            except Exception:
-                published = ""
-        if not title or not link: continue
-        uid = hashlib.sha256(link.encode("utf-8")).hexdigest()[:16]
+
+        if atom:
+            link_element = item.find(
+                "{http://www.w3.org/2005/Atom}link"
+            )
+            if link_element is not None:
+                link = link_element.attrib.get("href", link)
+
+        if not safe_url(link) or not title:
+            continue
+
+        summary = get_text(
+            item,
+            [
+                "description",
+                "{http://www.w3.org/2005/Atom}summary",
+                "{http://www.w3.org/2005/Atom}content"
+            ]
+        )
+
+        published = get_text(
+            item,
+            [
+                "pubDate",
+                "published",
+                "{http://www.w3.org/2005/Atom}published",
+                "{http://www.w3.org/2005/Atom}updated"
+            ]
+        )
+
+        published_at = parse_date(published)
+
+        uid = hashlib.sha256(
+            link.encode("utf-8")
+        ).hexdigest()[:16]
+
         results.append({
-            "id": uid, "title": title, "summary": desc[:500], "url": link,
-            "publisher": publisher, "region": region, "country": country or "",
-            "published_at": published, "collected_at": datetime.now(timezone.utc).isoformat()
+            "id": uid,
+            "title": title[:300],
+            "summary": summary[:500],
+            "url": link,
+            "publisher": publisher,
+            "region": region,
+            "country": country,
+            "published_at": published_at,
+            "collected_at": datetime.now(
+                timezone.utc
+            ).isoformat()
         })
+
     return results
 
 def google_news_url(country):
-    q = urllib.parse.quote(f'"{country}" when:7d')
-    return f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+    query = urllib.parse.quote(
+        f'"{country}" when:7d'
+    )
+    return (
+        "https://news.google.com/rss/search?q="
+        + query
+        + "&hl=en-US&gl=US&ceid=US:en"
+    )
 
 def main():
-    all_items, errors = [], []
-    for f in SOURCES["regional_feeds"]:
-        try: all_items.extend(parse_feed(f["url"], f["name"], f["region"]))
-        except Exception as e: errors.append({"source":f["name"],"error":str(e)[:180]})
-    for country in SOURCES["priority_countries"]:
-        try: all_items.extend(parse_feed(google_news_url(country), "Google News search", "国別", country))
-        except Exception as e: errors.append({"source":country,"error":str(e)[:180]})
-    dedup = {}
-    for item in all_items:
-        key = item["url"].split("?")[0]
-        if key not in dedup: dedup[key] = item
-    articles = list(dedup.values())
-    articles.sort(key=lambda x: x["published_at"] or "", reverse=True)
-    payload = {
-        "project":"LYTORA", "generated_at":datetime.now(timezone.utc).isoformat(),
-        "count":len(articles), "articles":articles, "source_errors":errors,
-        "notice":"RSSから取得した見出し・短い要約・リンクの一覧です。記事本文の転載ではありません。内容の正確性と日本との関連性は公開前に編集確認してください。"
-    }
-    OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Saved {len(articles)} articles; {len(errors)} source errors.")
+    all_items = []
+    errors = []
 
-if __name__ == "__main__": main()
+    for country in SOURCES.get("priority_countries", []):
+        try:
+            region = REGIONS.get(country, "World")
+            all_items.extend(
+                parse_feed(
+                    google_news_url(country),
+                    "Google News",
+                    region,
+                    country
+                )
+            )
+        except Exception as error:
+            errors.append({
+                "source": country,
+                "error": str(error)[:180]
+            })
+
+    for feed in SOURCES.get("regional_feeds", []):
+        try:
+            all_items.extend(
+                parse_feed(
+                    feed["url"],
+                    feed["name"],
+                    feed["region"]
+                )
+            )
+        except Exception as error:
+            errors.append({
+                "source": feed["name"],
+                "error": str(error)[:180]
+            })
+
+    dedup = {}
+
+    for item in all_items:
+        key = item["url"].split("#")[0]
+        if key not in dedup:
+            dedup[key] = item
+
+    articles = list(dedup.values())
+
+    articles.sort(
+        key=lambda item: item["published_at"] or "",
+        reverse=True
+    )
+
+    payload = {
+        "project": "LYTORA",
+        "generated_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "count": len(articles),
+        "articles": articles,
+        "source_errors": errors,
+        "notice": (
+            "RSSから取得した見出し・短い要約・リンクです。"
+            "記事本文は転載していません。"
+            "公開前に内容と日本との関連性を確認してください。"
+        )
+    }
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+
+    print(
+        f"Saved {len(articles)} articles; "
+        f"{len(errors)} source errors."
+    )
+
+if __name__ == "__main__":
+    main()
